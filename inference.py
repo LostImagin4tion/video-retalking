@@ -1,3 +1,4 @@
+import librosa
 import numpy as np
 import cv2, os, sys, subprocess, platform, torch
 from tqdm import tqdm
@@ -28,8 +29,10 @@ warnings.filterwarnings("ignore")
 
 args = options()
 
-def main():    
+
+def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    # device = 'cpu'
     print('[Info] Using {} for inference.'.format(device))
     os.makedirs(os.path.join('temp', args.tmp_dir), exist_ok=True)
 
@@ -38,6 +41,7 @@ def main():
     restorer = GFPGANer(model_path='checkpoints/GFPGANv1.3.pth', upscale=1, arch='clean', \
                         channel_multiplier=2, bg_upsampler=None)
 
+    print("[Step -3] Extract video frames")
     base_name = args.face.split('/')[-1]
     if os.path.isfile(args.face) and args.face.split('.')[1] in ['jpg', 'png', 'jpeg']:
         args.static = True
@@ -46,9 +50,13 @@ def main():
     elif args.face.split('.')[1] in ['jpg', 'png', 'jpeg']:
         full_frames = [cv2.imread(args.face)]
         fps = args.fps
+        video_duration = 0
     else:
         video_stream = cv2.VideoCapture(args.face)
+
         fps = video_stream.get(cv2.CAP_PROP_FPS)
+        frame_count = int(video_stream.get(cv2.CAP_PROP_FRAME_COUNT))
+        video_duration = frame_count / fps
 
         full_frames = []
         while True:
@@ -62,7 +70,44 @@ def main():
             frame = frame[y1:y2, x1:x2]
             full_frames.append(frame)
 
-    print ("[Step 0] Number of frames available for inference: "+str(len(full_frames)))
+    print("[Step -2] Extract audio")
+
+    if not args.audio.endswith('.wav'):
+        command = 'ffmpeg -loglevel error -y -i {} -strict -2 {}'.format(args.audio, 'temp/{}/temp.wav'.format(args.tmp_dir))
+        subprocess.call(command, shell=True)
+        args.audio = 'temp/{}/temp.wav'.format(args.tmp_dir)
+    wav = audio.load_wav(args.audio, 16000)
+
+    audio_duration = librosa.get_duration(wav)
+
+    print("[Step -1] Adjusting video duration to audio duration")
+
+    print(f"Audio duration {audio_duration} video duration {video_duration}")
+
+    time_index_left = 0
+    time_index_right = int(fps)
+    while audio_duration > video_duration:
+        full_frames.extend(full_frames[time_index_left : time_index_right])
+
+        time_index_left = time_index_right
+        time_index_right += int(fps)
+
+        video_duration += 1
+
+    print(f"New audio duration {audio_duration} video duration {video_duration}")
+
+    # temp_frame_h, temp_frame_w = full_frames[0].shape[:-1]
+    # temp_out = cv2.VideoWriter(
+    #     'results/check.mp4',
+    #     cv2.VideoWriter_fourcc(*'mp4v'),
+    #     fps,
+    #     (temp_frame_w, temp_frame_h)
+    # )
+
+    for frame in full_frames:
+        temp_out.write(frame)
+
+    print("[Step 0] Number of frames available for inference: "+str(len(full_frames)))
     # face detection & cropping, cropping the first frame as the style of FFHQ
     croper = Croper('checkpoints/shape_predictor_68_face_landmarks.dat')
     full_frames_RGB = [cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) for frame in full_frames]
@@ -84,7 +129,7 @@ def main():
         print('[Step 1] Using saved landmarks.')
         lm = np.loadtxt('temp/'+base_name+'_landmarks.txt').astype(np.float32)
         lm = lm.reshape([len(full_frames), -1, 2])
-       
+
     if not os.path.isfile('temp/'+base_name+'_coeffs.npy') or args.exp_img is not None or args.re_preprocess:
         net_recon = load_face3d_net(args.face3d_net_path, device)
         lm3d_std = load_lm3d('checkpoints/BFM')
@@ -102,7 +147,7 @@ def main():
 
             trans_params, im_idx, lm_idx, _ = align_img(frame, lm_idx, lm3d_std)
             trans_params = np.array([float(item) for item in np.hsplit(trans_params, 5)]).astype(np.float32)
-            im_idx_tensor = torch.tensor(np.array(im_idx)/255., dtype=torch.float32).permute(2, 0, 1).to(device).unsqueeze(0) 
+            im_idx_tensor = torch.tensor(np.array(im_idx)/255., dtype=torch.float32).permute(2, 0, 1).to(device).unsqueeze(0)
             with torch.no_grad():
                 coeffs = split_coeff(net_recon(im_idx_tensor))
 
@@ -121,7 +166,7 @@ def main():
         print('extract the exp from',args.exp_img)
         exp_pil = Image.open(args.exp_img).convert('RGB')
         lm3d_std = load_lm3d('third_part/face3d/BFM')
-        
+
         W, H = exp_pil.size
         kp_extractor = KeypointExtractor()
         lm_exp = kp_extractor.extract_keypoint([exp_pil], 'temp/'+base_name+'_temp.txt')[0]
@@ -158,13 +203,13 @@ def main():
                 semantic_source_numpy = semantic_npy[idx:idx+1]
             ratio = find_crop_norm_ratio(semantic_source_numpy, semantic_npy)
             coeff = transform_semantic(semantic_npy, idx, ratio).unsqueeze(0).to(device)
-        
+
             # hacking the new expression
-            coeff[:, :64, :] = expression[None, :64, None].to(device) 
+            coeff[:, :64, :] = expression[None, :64, None].to(device)
             with torch.no_grad():
                 output = D_Net(source_img, coeff)
             img_stablized = np.uint8((output['fake_image'].squeeze(0).permute(1,2,0).cpu().clamp_(-1, 1).numpy() + 1 )/2. * 255)
-            imgs.append(cv2.cvtColor(img_stablized,cv2.COLOR_RGB2BGR)) 
+            imgs.append(cv2.cvtColor(img_stablized,cv2.COLOR_RGB2BGR))
         np.save('temp/'+base_name+'_stablized.npy',imgs)
         del D_Net
     else:
@@ -172,11 +217,8 @@ def main():
         imgs = np.load('temp/'+base_name+'_stablized.npy')
     torch.cuda.empty_cache()
 
-    if not args.audio.endswith('.wav'):
-        command = 'ffmpeg -loglevel error -y -i {} -strict -2 {}'.format(args.audio, 'temp/{}/temp.wav'.format(args.tmp_dir))
-        subprocess.call(command, shell=True)
-        args.audio = 'temp/{}/temp.wav'.format(args.tmp_dir)
-    wav = audio.load_wav(args.audio, 16000)
+
+    # PROCESS AUDIO EXTRACTED AT [STEP -2]
     mel = audio.melspectrogram(wav)
     if np.isnan(mel.reshape(-1)).sum() > 0:
         raise ValueError('Mel contains nan! Using a TTS voice? Add a small epsilon noise to the wav file and try again')
