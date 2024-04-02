@@ -3,6 +3,7 @@ import cv2, os, sys, subprocess, platform, torch
 from tqdm import tqdm
 from PIL import Image
 from scipy.io import loadmat
+import os
 
 sys.path.insert(0, 'third_part')
 sys.path.insert(0, 'third_part/GPEN')
@@ -24,6 +25,11 @@ from utils.alignment_stit import crop_faces, calc_alignment_coefficients, paste_
 from utils.inference_utils import Laplacian_Pyramid_Blending_with_mask, face_detect, load_model, options, split_coeff, \
                                   trans_image, transform_semantic, find_crop_norm_ratio, load_face3d_net, exp_aus_dict
 import warnings
+
+import imageio
+
+from utils.face_enhancer import enhancer_generator_with_len, enhancer_list
+
 warnings.filterwarnings("ignore")
 
 args = options()
@@ -273,6 +279,23 @@ def main():
     command = 'ffmpeg -loglevel error -y -i {} -i {} -strict -2 -q:v 1 {}'.format(args.audio, 'temp/{}/result.mp4'.format(args.tmp_dir), args.outfile)
     subprocess.call(command, shell=platform.system() != 'Windows')
     print('outfile:', args.outfile)
+    
+    outfile_enhanced = args.outfile[: args.outfile.find('.mp4')] + '_enhanced.mp4'
+    try:
+        enhanced_images_gen_with_len = enhancer_generator_with_len(args.outfile)
+        imageio.mimsave(outfile_enhanced, enhanced_images_gen_with_len, fps=float(25))
+    except:
+        enhanced_images_gen_with_len = enhancer_list(args.outfile)
+        imageio.mimsave(outfile_enhanced, enhanced_images_gen_with_len, fps=float(25))
+    
+    outfile_enhanced_with_audio = outfile_enhanced[: outfile_enhanced.find('.mp4')] + '_with_audio.mp4'
+
+    command = 'ffmpeg -i {} -i {} -map 0:v -map 1:a -c:v copy -shortest {}'.format(outfile_enhanced, args.audio, outfile_enhanced_with_audio)
+    subprocess.call(command, shell=platform.system() != 'Windows')
+    
+    os.remove(outfile_enhanced)
+    
+    print('outfile enhanced:', outfile_enhanced_with_audio)
 
 
 # frames:256x256, full_frames: original size
