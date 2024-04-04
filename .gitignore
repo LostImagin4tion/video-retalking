@@ -1,3 +1,5 @@
+/.idea
+/sources
 *.pkl
 *.jpg
 *.pth
