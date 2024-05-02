@@ -47,9 +47,10 @@ from utils.inference_utils import (
 
 
 class Predictor(BasePredictor):
-    def setup(self) -> None:
+    def setup(self, device) -> None:
         """Load the model into memory to make running multiple predictions efficient"""
         self.enhancer = FaceEnhancement(
+            device=device,
             base_dir="checkpoints",
             size=512,
             model="GPEN-BFR-512",
@@ -57,7 +58,6 @@ class Predictor(BasePredictor):
             sr_model="rrdb_realesrnet_psnr",
             channel_multiplier=2,
             narrow=1,
-            device="cuda",
         )
         self.restorer = GFPGANer(
             model_path="checkpoints/GFPGANv1.3.pth",
@@ -67,7 +67,7 @@ class Predictor(BasePredictor):
             bg_upsampler=None,
         )
         self.croper = Croper("checkpoints/shape_predictor_68_face_landmarks.dat")
-        self.kp_extractor = KeypointExtractor()
+        self.kp_extractor = KeypointExtractor(device)
 
         face3d_net_path = "checkpoints/face3d_pretrain_epoch_20.pth"
 
@@ -76,11 +76,11 @@ class Predictor(BasePredictor):
 
     def predict(
         self,
+        device,
         face: Path = Input(description="Input video file of a talking-head."),
         input_audio: Path = Input(description="Input audio file."),
     ) -> Path:
         """Run a single prediction on the model"""
-        device = "cuda"
         args = argparse.Namespace(
             DNet_path="checkpoints/DNet.pt",
             LNet_path="checkpoints/LNet.pth",
@@ -311,7 +311,7 @@ class Predictor(BasePredictor):
             )
             imgs_enhanced.append(pred)
         gen = datagen(
-            imgs_enhanced.copy(), mel_chunks, full_frames, args, (oy1, oy2, ox1, ox2)
+            imgs_enhanced.copy(), mel_chunks, full_frames, args, (oy1, oy2, ox1, ox2), device
         )
 
         frame_h, frame_w = full_frames[0].shape[:-1]
@@ -324,7 +324,7 @@ class Predictor(BasePredictor):
 
         if args.up_face != "original":
             instance = GANimationModel()
-            instance.initialize()
+            instance.initialize(device)
             instance.setup()
 
         # kp_extractor = KeypointExtractor()
@@ -437,7 +437,7 @@ class Predictor(BasePredictor):
 
 
 # frames:256x256, full_frames: original size
-def datagen(frames, mels, full_frames, args, cox):
+def datagen(frames, mels, full_frames, args, cox, device):
     img_batch, mel_batch, frame_batch, coords_batch, ref_batch, full_frame_batch = (
         [],
         [],
@@ -451,7 +451,7 @@ def datagen(frames, mels, full_frames, args, cox):
     image_size = 256
 
     # original frames
-    kp_extractor = KeypointExtractor()
+    kp_extractor = KeypointExtractor(device)
     fr_pil = [Image.fromarray(frame) for frame in frames]
     lms = kp_extractor.extract_keypoint(
         fr_pil, "temp/" + base_name + "x12_landmarks.txt"
@@ -472,7 +472,7 @@ def datagen(frames, mels, full_frames, args, cox):
     del kp_extractor.detector
 
     oy1, oy2, ox1, ox2 = cox
-    face_det_results = face_detect(full_frames, args, jaw_correction=True)
+    face_det_results = face_detect(full_frames, args, device, jaw_correction=True)
 
     for inverse_transform, crop, full_frame, face_det in zip(
         inverse_transforms, crops, full_frames, face_det_results

@@ -29,7 +29,7 @@ warnings.filterwarnings("ignore")
 args = options()
 
 def main():    
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     print('[Info] Using {} for inference.'.format(device))
     os.makedirs(os.path.join('temp', args.tmp_dir), exist_ok=True)
 
@@ -52,6 +52,7 @@ def main():
 
         full_frames = []
         while True:
+            print(f'Iteration {len(full_frames)}')
             still_reading, frame = video_stream.read()
             if not still_reading:
                 video_stream.release()
@@ -61,6 +62,8 @@ def main():
             if y2 == -1: y2 = frame.shape[0]
             frame = frame[y1:y2, x1:x2]
             full_frames.append(frame)
+
+    print('Finished reading video')
 
     print ("[Step 0] Number of frames available for inference: "+str(len(full_frames)))
     # face detection & cropping, cropping the first frame as the style of FFHQ
@@ -78,7 +81,7 @@ def main():
     # get the landmark according to the detected face.
     if not os.path.isfile('temp/'+base_name+'_landmarks.txt') or args.re_preprocess:
         print('[Step 1] Landmarks Extraction in Video.')
-        kp_extractor = KeypointExtractor()
+        kp_extractor = KeypointExtractor(device)
         lm = kp_extractor.extract_keypoint(frames_pil, './temp/'+base_name+'_landmarks.txt')
     else:
         print('[Step 1] Using saved landmarks.')
@@ -123,7 +126,7 @@ def main():
         lm3d_std = load_lm3d('third_part/face3d/BFM')
         
         W, H = exp_pil.size
-        kp_extractor = KeypointExtractor()
+        kp_extractor = KeypointExtractor(device)
         lm_exp = kp_extractor.extract_keypoint([exp_pil], 'temp/'+base_name+'_temp.txt')[0]
         if np.mean(lm_exp) == -1:
             lm_exp = (lm3d_std[:, :2] + 1) / 2.
@@ -200,17 +203,17 @@ def main():
         img = imgs[idx]
         pred, _, _ = enhancer.process(img, img, face_enhance=True, possion_blending=False)
         imgs_enhanced.append(pred)
-    gen = datagen(imgs_enhanced.copy(), mel_chunks, full_frames, None, (oy1,oy2,ox1,ox2))
+    gen = datagen(imgs_enhanced.copy(), mel_chunks, full_frames, None, (oy1,oy2,ox1,ox2), device)
 
     frame_h, frame_w = full_frames[0].shape[:-1]
     out = cv2.VideoWriter('temp/{}/result.mp4'.format(args.tmp_dir), cv2.VideoWriter_fourcc(*'mp4v'), fps, (frame_w, frame_h))
     
     if args.up_face != 'original':
         instance = GANimationModel()
-        instance.initialize()
+        instance.initialize(device)
         instance.setup()
 
-    kp_extractor = KeypointExtractor()
+    kp_extractor = KeypointExtractor(device)
     for i, (img_batch, mel_batch, frames, coords, img_original, f_frames) in enumerate(tqdm(gen, desc='[Step 6] Lip Synthesis:', total=int(np.ceil(float(len(mel_chunks)) / args.LNet_batch_size)))):
         img_batch = torch.FloatTensor(np.transpose(img_batch, (0, 3, 1, 2))).to(device)
         mel_batch = torch.FloatTensor(np.transpose(mel_batch, (0, 3, 1, 2))).to(device)
@@ -276,14 +279,14 @@ def main():
 
 
 # frames:256x256, full_frames: original size
-def datagen(frames, mels, full_frames, frames_pil, cox):
+def datagen(frames, mels, full_frames, frames_pil, cox, device):
     img_batch, mel_batch, frame_batch, coords_batch, ref_batch, full_frame_batch = [], [], [], [], [], []
     base_name = args.face.split('/')[-1]
     refs = []
     image_size = 256 
 
     # original frames
-    kp_extractor = KeypointExtractor()
+    kp_extractor = KeypointExtractor(device)
     fr_pil = [Image.fromarray(frame) for frame in frames]
     lms = kp_extractor.extract_keypoint(fr_pil, 'temp/'+base_name+'x12_landmarks.txt')
     frames_pil = [ (lm, frame) for frame,lm in zip(fr_pil, lms)] # frames is the croped version of modified face
@@ -292,7 +295,7 @@ def datagen(frames, mels, full_frames, frames_pil, cox):
     del kp_extractor.detector
 
     oy1,oy2,ox1,ox2 = cox
-    face_det_results = face_detect(full_frames, args, jaw_correction=True)
+    face_det_results = face_detect(full_frames, args, device, jaw_correction=True)
 
     for inverse_transform, crop, full_frame, face_det in zip(inverse_transforms, crops, full_frames, face_det_results):
         imc_pil = paste_image(inverse_transform, crop, Image.fromarray(

@@ -44,8 +44,8 @@ class NetworkSize(Enum):
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
 class FaceAlignment:
-    def __init__(self, landmarks_type, network_size=NetworkSize.LARGE,
-                 device='cuda', flip_input=False, face_detector='sfd', verbose=False):
+    def __init__(self, landmarks_type, device, network_size=NetworkSize.LARGE,
+                  flip_input=False, face_detector='sfd', verbose=False):
         self.device = device
         self.flip_input = flip_input
         self.landmarks_type = landmarks_type

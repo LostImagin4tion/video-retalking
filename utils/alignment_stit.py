@@ -147,10 +147,9 @@ def compute_transform(lm, predictor, detector=None, scale=1.0, fa=None):
     return c, x, y
 
 
-def crop_faces(IMAGE_SIZE, files, scale, center_sigma=0.0, xy_sigma=0.0, use_fa=False, fa=None):
+def crop_faces(IMAGE_SIZE, files, scale, device, center_sigma=0.0, xy_sigma=0.0, use_fa=False, fa=None):
     if use_fa:
         if fa == None:
-            device = 'cuda' if torch.cuda.is_available() else 'cpu'
             fa = face_alignment.FaceAlignment(face_alignment.LandmarksType._2D, flip_input=True, device=device)
         predictor = None
         detector = None

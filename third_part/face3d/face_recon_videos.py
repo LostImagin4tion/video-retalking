@@ -147,8 +147,8 @@ def main(opt, model):
 if __name__ == '__main__':
     opt = InferenceOptions().parse()  # get test options
     model = create_model(opt)
-    model.setup(opt)
     model.device = 'cuda:0'
+    model.setup(opt, model.device)
     model.parallelize()
     model.eval()
 

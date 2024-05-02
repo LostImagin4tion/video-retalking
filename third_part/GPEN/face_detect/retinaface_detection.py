@@ -17,7 +17,7 @@ import torch.nn.functional as F
 
 
 class RetinaFaceDetection(object):
-    def __init__(self, base_dir, device='cuda', network='RetinaFace-R50'):
+    def __init__(self, base_dir, device, network='RetinaFace-R50'):
         torch.set_grad_enabled(False)
         cudnn.benchmark = True
         self.pretrained_path = os.path.join(base_dir, network+'.pth')

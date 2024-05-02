@@ -9,14 +9,14 @@ class GANimationModel(BaseModel):
         super(GANimationModel, self).__init__()
         self.name = "GANimation"
 
-    def initialize(self):
+    def initialize(self, device):
         # super(GANimationModel, self).initialize(opt)
         self.is_train = False
         self.models_name = []
         self.net_gen = model_utils.define_splitG(3, 17, 64, use_dropout=False, 
                     norm='instance', init_type='normal', init_gain=0.02, gpu_ids=[0])
         self.models_name.append('gen')
-        self.device = 'cuda'
+        self.device = device
         
         # if self.is_train:
         #     self.net_dis = model_utils.define_splitD(3, 17, self.opt.final_size, self.opt.ndf, 

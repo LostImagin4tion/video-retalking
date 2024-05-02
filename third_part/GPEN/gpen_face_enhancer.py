@@ -11,12 +11,12 @@ from align_faces import warp_and_crop_face, get_reference_facial_points
 from utils.inference_utils import Laplacian_Pyramid_Blending_with_mask
 
 class FaceEnhancement(object):
-    def __init__(self, base_dir='./', size=512, model=None, use_sr=True, sr_model=None, channel_multiplier=2, narrow=1, device='cuda'):
+    def __init__(self, device, base_dir='./', size=512, model=None, use_sr=True, sr_model=None, channel_multiplier=2, narrow=1):
         self.facedetector = RetinaFaceDetection(base_dir, device)
-        self.facegan = FaceGAN(base_dir, size, model, channel_multiplier, narrow, device=device)
+        self.facegan = FaceGAN(device, base_dir, size, model, channel_multiplier, narrow)
         # self.srmodel =  RealESRNet(base_dir, sr_model, device=device)
         self.srmodel=None
-        self.faceparser = FaceParse(base_dir, device=device)
+        self.faceparser = FaceParse(device, base_dir)
         self.use_sr = use_sr
         self.size = size
         self.threshold = 0.9

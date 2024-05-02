@@ -16,12 +16,12 @@ from face3d.extract_kp_videos import KeypointExtractor
 
 
 class CoeffDetector(nn.Module):
-    def __init__(self, opt):
+    def __init__(self, opt, device):
         super().__init__()
 
         self.model = create_model(opt)
-        self.model.setup(opt)
-        self.model.device = 'cuda'
+        self.model.setup(opt, device)
+        self.model.device = device
         self.model.parallelize()
         self.model.eval()
 
@@ -92,8 +92,8 @@ def get_data_path(root, keypoint_root):
 
 if __name__ == "__main__":
     opt = InferenceOptions().parse() 
-    coeff_detector = CoeffDetector(opt)
-    kp_extractor = KeypointExtractor()
+    coeff_detector = CoeffDetector(opt, 'cuda:0')
+    kp_extractor = KeypointExtractor('cuda:0')
     image_names, keypoint_names = get_data_path(opt.input_dir, opt.keypoint_dir)
     makedirs(opt.keypoint_dir, exist_ok=True)
     makedirs(opt.output_dir, exist_ok=True)

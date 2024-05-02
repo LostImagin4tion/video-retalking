@@ -13,7 +13,7 @@ from face_parse.model import BiSeNet
 import torchvision.transforms as transforms
 
 class FaceParse(object):
-    def __init__(self, base_dir='./', model='ParseNet-latest', device='cuda', mask_map = [0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0]):
+    def __init__(self, device, base_dir='./', model='ParseNet-latest', mask_map = [0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0]):
         self.mfile = os.path.join(base_dir, model+'.pth')
         self.size = 512
         self.device = device
@@ -86,7 +86,7 @@ class FaceParse(object):
 
 
 class FaceParse_v2(object):
-    def __init__(self, device='cuda', mask_map = [0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0]):
+    def __init__(self, device, mask_map = [0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0]):
         self.mfile = '/apdcephfs/private_quincheng/Expression/face-parsing.PyTorch/res/cp/79999_iter.pth'
         self.size = 512
         self.device = device
