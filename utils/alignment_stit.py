@@ -68,9 +68,10 @@ def align_face(filepath_or_image, predictor, output_size, detector=None,
 
 def crop_image(filepath, output_size, quad, enable_padding=False):
     x = (quad[3] - quad[1]) / 2
-    print(f'CROP IMAGE x {x}')
     qsize = np.hypot(*x) * 2
-    print(f'CROP IMAGE qsize {qsize} output size {output_size}')
+
+    if qsize is None:
+        return None
     # read image
     if isinstance(filepath, PIL.Image.Image):
         img = filepath
@@ -78,7 +79,6 @@ def crop_image(filepath, output_size, quad, enable_padding=False):
         img = PIL.Image.open(filepath)
     transform_size = output_size
     # Shrink.
-    print(f'CROP IMAGE divide {qsize / output_size * 0.5} floor {qsize / output_size * 0.5}')
     shrink = int(np.floor(qsize / output_size * 0.5))
     if shrink > 1:
         rsize = (int(np.rint(float(img.size[0]) / shrink)), int(np.rint(float(img.size[1]) / shrink)))
@@ -199,9 +199,11 @@ def crop_faces_by_quads(IMAGE_SIZE, files, quads):
     for quad, (_, path) in tqdm(zip(quads, files), total=len(quads)):
         print(f'CROP FACES BY QUAD {quad}')
         crop = crop_image(path, IMAGE_SIZE, quad.copy())
-        orig_image = path # Image.open(path)
-        orig_images.append(orig_image)
-        crops.append(crop)
+
+        if crop is not None:
+            orig_image = path # Image.open(path)
+            orig_images.append(orig_image)
+            crops.append(crop)
     return crops, orig_images
 
 
