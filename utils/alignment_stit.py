@@ -168,9 +168,10 @@ def crop_faces(IMAGE_SIZE, files, scale, center_sigma=0.0, xy_sigma=0.0, use_fa=
     for lm, pil in tqdm(files):
         c, x, y = compute_transform(lm, predictor, detector=detector,
                                     scale=scale, fa=fa)
-        cs.append(c)
-        xs.append(x)
-        ys.append(y)
+        if c is not None and x is not None and y is not None:
+            cs.append(c)
+            xs.append(x)
+            ys.append(y)
 
     cs = np.stack(cs)
     xs = np.stack(xs)
