@@ -11,4 +11,4 @@ numpy
 imageio-ffmpeg==0.4.7
 imageio==2.19.3
 gfpgan
-reealesrgan
+realesrgan
